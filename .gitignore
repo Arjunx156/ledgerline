@@ -1,0 +1,11 @@
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+coverage.*
+.env
+.env.*
+!.env.example
+node_modules/
+docs/private/
