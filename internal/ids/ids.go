@@ -19,6 +19,7 @@ const (
 	Delivery        = "whd"
 	Request         = "req"
 	Authorization   = "auth"
+	DemoSession     = "ds"
 )
 
 const (

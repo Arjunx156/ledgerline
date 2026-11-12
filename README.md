@@ -4,7 +4,7 @@ A Stripe-style payments API in Go and PostgreSQL: retries that never charge twic
 
 ## Status
 
-The payments API is in: customers, and payment intents you can create, confirm, capture and cancel against a simulated card processor. Idempotency keys come next, and with them retries that are safe to send. The design is [docs/spec.md](docs/spec.md), corrected and extended by [docs/spec-amendment-v1.2.md](docs/spec-amendment-v1.2.md), and the build order is [docs/plan.md](docs/plan.md).
+The payments API is in: customers, and payment intents you can create, confirm, capture and cancel against a simulated card processor. A demo mode now hands out sandbox sessions and streams every step the server takes for each one live, with a bare page that runs it from a phone. Idempotency keys come next, and with them retries that are safe to send. The design is [docs/spec.md](docs/spec.md), corrected and extended by [docs/spec-amendment-v1.2.md](docs/spec-amendment-v1.2.md), and the build order is [docs/plan.md](docs/plan.md).
 
 ## Quick start
 
@@ -46,6 +46,40 @@ Each rule has a test in [migrations/schema_test.go](migrations/schema_test.go).
 - The card processor is never called inside a database transaction, and never waited on for more than five seconds. Past that the payment stays in `processing` and the client gets a 503, never a guess.
 - The simulated processor keeps its memory in Postgres, so a repeated request gets its original answer even after a restart, and of a capture and a void on one authorization it lets exactly one through.
 - Errors always have the same four fields and name the parameter at fault. A misspelt parameter, `49900.5` or `"49900"` as an amount is a 400, not a silent default.
+
+## Demo mode
+
+`ledgerline demo` is `serve` plus what the public proof console needs. Anyone can start a sandbox session: a fresh merchant with its own key, good for an hour, at most ten an hour from one network. Every step the server takes for that session is stored in Postgres and pushed to the browser as server-sent events, so a dropped connection picks up exactly where it left off.
+
+Try it locally with `just demo` in one terminal and `just page` in another, then open <http://localhost:5173/?api=http://localhost:8080>. The page starts a session, pays it with the test card you pick and prints the trace as it arrives. "Send 20 requests at once" shows whether the connection multiplexes: over HTTP/1.1 a browser sends six at a time, over HTTP/2 all twenty go together.
+
+## Deploying the demo
+
+Both halves run free: Postgres on Neon, and the API and the page on Render, described by [render.yaml](render.yaml). The container only ever holds the app role's credentials. Migrations run from your own machine, as the owner.
+
+1. **Database.** Create a Neon project on Postgres 16 in AWS Asia Pacific (Singapore), next to Render's Singapore region. In its SQL Editor, create the role the API connects as:
+
+   ```sql
+   CREATE ROLE ledgerline_app LOGIN PASSWORD 'a long random password';
+   ```
+
+   Create it with SQL, not in the Console: roles made in the Console join `neon_superuser`, which would undo the least-privilege grants the migrations make.
+
+2. **Migrations.** Copy the owner's direct connection string from the Neon dashboard (connection pooling off), then from a checkout:
+
+   ```bash
+   LEDGERLINE_MIGRATE_URL='postgresql://neondb_owner:...@ep-....ap-southeast-1.aws.neon.tech/neondb?sslmode=require' go run ./cmd/ledgerline migrate up
+   ```
+
+   Render deploys a merge as soon as CI passes, so apply a branch's new migrations before merging it.
+
+3. **Render.** In the Render dashboard choose New, then Blueprint, connect this repository and pick the branch. Render reads render.yaml and asks for one secret, `LEDGERLINE_DATABASE_URL`: paste `ledgerline_app`'s direct connection string, ending in `?sslmode=require`. It must not be the `-pooler` host. The trace stream holds a `LISTEN`, which needs a session of its own, and Neon's pooler takes the connection back after every transaction.
+
+4. **Addresses.** Render names each address after its service and adds a suffix when the name is taken; this deployment's are `ledgerline-api-iy4a.onrender.com` and `ledgerline-skeleton.onrender.com`. A new deployment that gets other addresses updates `LEDGERLINE_DEMO_ORIGINS` and the page's `Content-Security-Policy` in render.yaml, and the `ledgerline-api` meta tag in [web/skeleton/index.html](web/skeleton/index.html).
+
+5. Once the branch is merged, point the Blueprint at `main`.
+
+Free services sleep when nobody is using them. The first request after a quiet spell takes about a minute while the API wakes, and the page says so while it waits.
 
 ---
 

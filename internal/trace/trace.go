@@ -100,3 +100,45 @@ func (m *Memory) Events() []Event {
 	defer m.mu.Unlock()
 	return append([]Event(nil), m.events...)
 }
+
+// Pending holds a request's events until Bind says where they go. A request
+// is traced from its first step, before anyone knows whose it is: in demo
+// mode that is learnt only once its API key has been checked. Events of a
+// request that is never bound are dropped with it.
+type Pending struct {
+	mu     sync.Mutex
+	target Recorder
+	held   []Event
+}
+
+func (p *Pending) Record(e Event) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.target != nil {
+		p.target.Record(e)
+		return
+	}
+	p.held = append(p.held, e)
+}
+
+func (p *Pending) bind(r Recorder) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.target != nil {
+		return
+	}
+	p.target = r
+	for _, e := range p.held {
+		r.Record(e)
+	}
+	p.held = nil
+}
+
+// Bind sends ctx's pending events, and every later one, to r. A request is
+// bound once. It does nothing when ctx's recorder is not a Pending, such as
+// a test's Memory, which already records everything.
+func Bind(ctx context.Context, r Recorder) {
+	if p, ok := ctx.Value(recorderKey{}).(*Pending); ok {
+		p.bind(r)
+	}
+}

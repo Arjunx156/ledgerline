@@ -16,7 +16,7 @@ import (
 // a dropped connection, and the stack goes to the log.
 func TestPanicBecomesA500(t *testing.T) {
 	var logs bytes.Buffer
-	h := instrument(slog.New(slog.NewJSONHandler(&logs, nil)))(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	h := instrument(slog.New(slog.NewJSONHandler(&logs, nil)), false)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		panic("boom")
 	}))
 	rec := httptest.NewRecorder()

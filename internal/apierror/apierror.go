@@ -5,6 +5,7 @@ package apierror
 import (
 	"fmt"
 	"net/http"
+	"time"
 )
 
 // Error types, as in the response's "type" field.
@@ -22,6 +23,9 @@ type Error struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
 	Param   string `json:"param,omitempty"`
+
+	// RetryAfter, when set, is sent as the Retry-After header.
+	RetryAfter time.Duration `json:"-"`
 }
 
 func (e *Error) Error() string { return e.Code + ": " + e.Message }
@@ -74,7 +78,15 @@ func Card(code, message string) *Error {
 // idempotency keys.
 func ProcessorUnavailable() *Error {
 	return &Error{Status: http.StatusServiceUnavailable, Type: TypeAPI, Code: "processor_unavailable",
-		Message: "The card processor did not answer in time. The payment stays where it was until its outcome is known."}
+		Message:    "The card processor did not answer in time. The payment stays where it was until its outcome is known.",
+		RetryAfter: time.Second}
+}
+
+// RateLimited is a 429. retryAfter says when the next request will be let
+// through.
+func RateLimited(message string, retryAfter time.Duration) *Error {
+	return &Error{Status: http.StatusTooManyRequests, Type: TypeInvalidRequest, Code: "rate_limited",
+		Message: message, RetryAfter: retryAfter}
 }
 
 // Internal is a 500. It never carries the underlying error, which is logged

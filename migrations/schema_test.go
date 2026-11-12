@@ -405,6 +405,11 @@ func TestAppRoleHasLeastPrivilege(t *testing.T) {
 		`DELETE FROM simulator.requests`,
 		`DELETE FROM simulator.authorizations`,
 		`DROP SCHEMA simulator CASCADE`,
+		`UPDATE demo_sessions SET expires_at = now() + interval '1 year'`,
+		`UPDATE demo_sessions SET merchant_id = merchant_id`,
+		`DELETE FROM demo_sessions`,
+		`UPDATE demo_trace_events SET site = site`,
+		`DELETE FROM demo_trace_events`,
 	}
 	for _, sql := range denied {
 		t.Run(sql, func(t *testing.T) {
@@ -414,4 +419,30 @@ func TestAppRoleHasLeastPrivilege(t *testing.T) {
 			assert.Contains(t, []string{insufficientPriv}, pgErr.Code, pgErr.Message)
 		})
 	}
+}
+
+// A demo session's merchant must be a sandbox, so the demo can never be
+// pointed at a real merchant's money.
+func TestDemoSessionNeedsSandboxMerchant(t *testing.T) {
+	db := dbtest.New(t)
+	exec(t, db.App, `INSERT INTO merchants (id, name) VALUES ('acct_real', 'Real')`)
+	exec(t, db.App, `INSERT INTO merchants (id, name, sandbox) VALUES ('acct_sand', 'Sandbox', true)`)
+
+	_, err := db.App.Exec(context.Background(), `INSERT INTO demo_sessions (id, merchant_id, expires_at)
+		VALUES ('ds_real', 'acct_real', now() + interval '1 hour')`)
+	requirePgError(t, err, foreignKeyViolation, "demo_sessions_merchant_id_sandbox_fkey")
+	_, err = db.App.Exec(context.Background(), `INSERT INTO demo_sessions (id, merchant_id, sandbox, expires_at)
+		VALUES ('ds_lie', 'acct_real', false, now() + interval '1 hour')`)
+	requirePgError(t, err, checkViolation, "demo_sessions_sandbox_check")
+
+	exec(t, db.App, `INSERT INTO demo_sessions (id, merchant_id, expires_at) VALUES ('ds_ok', 'acct_sand', now() + interval '1 hour')`)
+	exec(t, db.App, `UPDATE demo_sessions SET last_seq = last_seq + 2 WHERE id = 'ds_ok'`)
+	exec(t, db.App, `INSERT INTO demo_trace_events (session, seq, request_id, at, lane, site)
+		VALUES ('ds_ok', 1, 'req_1', now(), 'api', 'api.request')`)
+	_, err = db.App.Exec(context.Background(), `INSERT INTO demo_trace_events (session, seq, request_id, at, lane, site)
+		VALUES ('ds_ok', 1, 'req_1', now(), 'api', 'api.response')`)
+	requirePgError(t, err, uniqueViolation, "demo_trace_events_pkey")
+	_, err = db.App.Exec(context.Background(), `INSERT INTO demo_trace_events (session, seq, request_id, at, lane, site)
+		VALUES ('ds_ok', 2, 'req_1', now(), 'browser', 'api.response')`)
+	requirePgError(t, err, checkViolation, "demo_trace_events_lane_check")
 }
