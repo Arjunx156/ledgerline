@@ -2,6 +2,9 @@ package migrations_test
 
 import (
 	"context"
+	"io/fs"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -12,6 +15,7 @@ import (
 
 	"github.com/Arjunx156/ledgerline/internal/database"
 	"github.com/Arjunx156/ledgerline/internal/database/dbtest"
+	"github.com/Arjunx156/ledgerline/migrations"
 )
 
 // SQLSTATE codes the schema is expected to raise.
@@ -101,7 +105,10 @@ func TestUpDownUp(t *testing.T) {
 		 WHERE schemaname = 'public' AND tablename <> 'schema_migrations'
 		UNION ALL
 		SELECT 'function ' || p.proname FROM pg_proc p
-		  JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public'`)
+		  JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public'
+		UNION ALL
+		SELECT 'schema ' || nspname FROM pg_namespace
+		 WHERE nspname NOT IN ('public', 'information_schema') AND nspname NOT LIKE 'pg\_%'`)
 	require.NoError(t, err)
 	leftovers, err = pgx.CollectRows(rows, pgx.RowTo[string])
 	require.NoError(t, err)
@@ -111,7 +118,24 @@ func TestUpDownUp(t *testing.T) {
 	version, dirty, err := database.MigrationVersion(db.OwnerURL)
 	require.NoError(t, err)
 	assert.False(t, dirty)
-	assert.Equal(t, uint(2), version)
+	assert.Equal(t, latestMigration(t), version)
+}
+
+// latestMigration reads the highest version from the embedded files, so
+// adding a migration never means editing this test.
+func latestMigration(t *testing.T) uint {
+	t.Helper()
+	names, err := fs.Glob(migrations.FS, "*.up.sql")
+	require.NoError(t, err)
+	require.NotEmpty(t, names)
+	var latest uint
+	for _, name := range names {
+		prefix, _, _ := strings.Cut(name, "_")
+		v, err := strconv.ParseUint(prefix, 10, 32)
+		require.NoError(t, err, name)
+		latest = max(latest, uint(v))
+	}
+	return latest
 }
 
 func TestLedgerAcceptsBalancedTransaction(t *testing.T) {
@@ -376,6 +400,9 @@ func TestAppRoleHasLeastPrivilege(t *testing.T) {
 		`UPDATE ledger_accounts SET type = 'asset'`,
 		`DELETE FROM events`,
 		`DROP TABLE ledger_entries`,
+		`DELETE FROM simulator.requests`,
+		`DELETE FROM simulator.authorizations`,
+		`DROP SCHEMA simulator CASCADE`,
 	}
 	for _, sql := range denied {
 		t.Run(sql, func(t *testing.T) {

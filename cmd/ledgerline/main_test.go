@@ -7,11 +7,15 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"regexp"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/Arjunx156/ledgerline/internal/auth"
+	"github.com/Arjunx156/ledgerline/internal/database/dbtest"
 )
 
 func noEnv(string) string { return "" }
@@ -37,6 +41,8 @@ func TestRun(t *testing.T) {
 		{"migrate down zero", []string{"migrate", "down", "0"}, 2, "", `got "0"`},
 		{"migrate down words", []string{"migrate", "down", "lots"}, 2, "", `got "lots"`},
 		{"migrate without database", []string{"migrate", "up"}, 1, "", "LEDGERLINE_MIGRATE_URL is not set"},
+		{"seed without database", []string{"seed"}, 1, "", "LEDGERLINE_DATABASE_URL is not set"},
+		{"seed with two names", []string{"seed", "a", "b"}, 2, "", "at most one argument"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -105,4 +111,34 @@ func TestRunServerDrainsInFlightRequests(t *testing.T) {
 
 	_, err = http.Get("http://" + ln.Addr().String() + "/")
 	require.Error(t, err, "no new connections after shutdown")
+}
+
+// The key seed prints is the merchant's working key, and nothing but its
+// hash is stored.
+func TestSeedPrintsAWorkingKeyOnce(t *testing.T) {
+	db := dbtest.New(t)
+	appURL := db.App.Config().ConnString()
+	getenv := func(name string) string {
+		if name == "LEDGERLINE_DATABASE_URL" {
+			return appURL
+		}
+		return ""
+	}
+	var stdout, stderr bytes.Buffer
+	require.Equal(t, 0, run(t.Context(), []string{"seed", "Asha's store"}, getenv, &stdout, &stderr), stderr.String())
+
+	merchant := regexp.MustCompile(`merchant\s+(acct_\w+)`).FindStringSubmatch(stdout.String())
+	key := regexp.MustCompile(`secret key\s+(sk_test_\w+)`).FindStringSubmatch(stdout.String())
+	require.Len(t, merchant, 2, stdout.String())
+	require.Len(t, key, 2, stdout.String())
+
+	got, err := auth.Lookup(t.Context(), db.App, key[1])
+	require.NoError(t, err)
+	assert.Equal(t, merchant[1], got.MerchantID)
+	assert.False(t, got.Operator)
+
+	var stored []byte
+	require.NoError(t, db.Owner.QueryRow(t.Context(), `SELECT key_hash FROM api_keys`).Scan(&stored))
+	assert.Equal(t, auth.Hash(key[1]), stored)
+	assert.NotContains(t, string(stored), key[1])
 }

@@ -13,10 +13,21 @@ import (
 	"github.com/Arjunx156/ledgerline/internal/api"
 	"github.com/Arjunx156/ledgerline/internal/buildinfo"
 	"github.com/Arjunx156/ledgerline/internal/database"
+	"github.com/Arjunx156/ledgerline/internal/payments"
+	"github.com/Arjunx156/ledgerline/internal/processor"
 )
 
-// How long in-flight requests get to finish after a shutdown signal.
-const drainTimeout = 10 * time.Second
+const (
+	// How long in-flight requests get to finish after a shutdown signal.
+	drainTimeout = 10 * time.Second
+
+	// How long the API waits on each processor call before answering 503.
+	processorTimeout = 5 * time.Second
+
+	// How long pm_card_timeout holds its answer: well past processorTimeout,
+	// so the API always gives up first, as it would on a real network.
+	simulatorOutlive = 30 * time.Second
+)
 
 func serve(ctx context.Context, getenv func(string) string, logger *slog.Logger) error {
 	dbURL, err := requireEnv(getenv, "LEDGERLINE_DATABASE_URL")
@@ -34,7 +45,9 @@ func serve(ctx context.Context, getenv func(string) string, logger *slog.Logger)
 		return err
 	}
 	logger.Info("serving", "addr", ln.Addr().String(), "commit", buildinfo.Read().String())
-	return runServer(ctx, ln, api.NewRouter(pool, logger), logger)
+	sim := processor.NewSimulator(pool, simulatorOutlive)
+	svc := payments.NewService(pool, sim, payments.Config{ProcessorTimeout: processorTimeout})
+	return runServer(ctx, ln, api.NewRouter(api.Config{DB: pool, Logger: logger, Payments: svc}), logger)
 }
 
 // runServer serves until ctx is cancelled, then stops accepting connections

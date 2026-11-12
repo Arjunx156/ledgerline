@@ -26,6 +26,10 @@ migrate:
 migrate-down n="1":
     go run ./cmd/ledgerline migrate down {{n}}
 
+# Create a merchant and print its secret key, once
+seed name="Test merchant":
+    go run ./cmd/ledgerline seed "{{name}}"
+
 # Run the API
 run:
     go run ./cmd/ledgerline serve

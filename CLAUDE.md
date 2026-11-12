@@ -11,6 +11,7 @@ A Stripe-style payments API in Go and PostgreSQL, with a public proof console wh
 - `just up` then `just migrate`: local Postgres 16 on port 5433 (5432 belongs to another project)
 - `just check`: gofmt, vet, staticcheck, govulncheck, all tests. Needs `just up`. Must pass before any task is called done.
 - `just run`: the API on :8080
+- `just seed`: a merchant and its secret key, printed once
 - `just fmt`: format
 - `just test -run TestLedger`: a subset of tests
 
