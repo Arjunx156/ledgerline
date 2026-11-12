@@ -183,7 +183,7 @@ Presentable after S5 as an API, strong after S8, and S9 turns "at Stripe scale I
 
 ## 8. What Arjun owns
 
-Per stage: writes the PR description; answers that milestone's "must be able to explain" questions unaided before merging; adds to `docs/ai-notes.md` whenever the AI is wrong. Overall: writes DESIGN.md and one short ADR per decision in section 2; works one capture by hand; runs the fuzz, the crash matrix and k6 personally; reads every surviving mutant.
+Per stage: reviews and edits the PR description before merging; answers that milestone's "must be able to explain" questions unaided before merging; adds to `docs/ai-notes.md` whenever the AI is wrong. Overall: writes DESIGN.md and one short ADR per decision in section 2; works one capture by hand; runs the fuzz, the crash matrix and k6 personally; reads every surviving mutant.
 
 ## 9. Risks
 

@@ -29,5 +29,5 @@ A Stripe-style payments API in Go and PostgreSQL, with a public proof console wh
 - No network call while a database transaction is open. Lock order: idempotency key, payment intent, refund, ledger.
 - Stages S3, S4 and S5 are test-first: show the failing tests before writing the implementation.
 - Tests run with `-race` in CI always, and locally whenever a C compiler is on PATH.
-- Arjun writes DESIGN.md and every PR description. Review them when asked; never write them.
+- Open each stage's PR with a description: what changed, why, what moved from the plan, how it was verified, where to look first. Arjun reviews it before merging. Arjun writes DESIGN.md; review it when asked, never write it.
 - Arjun keeps `docs/ai-notes.md`. When a mistake of yours is caught, say so plainly so it can be logged.
