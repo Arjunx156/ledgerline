@@ -31,6 +31,11 @@ func NewSimulator(db *pgxpool.Pool, outlive time.Duration) *Simulator {
 	return &Simulator{db: db, outlive: outlive}
 }
 
+// decisionTimeout bounds the simulator's own transaction. It no longer stops
+// when the caller does, so this is what keeps a stuck database from holding
+// it forever.
+const decisionTimeout = 10 * time.Second
+
 const (
 	outcomeApproved = "approved"
 	outcomeDeclined = "declined"
@@ -49,7 +54,7 @@ func (s *Simulator) Authorize(ctx context.Context, req AuthorizeRequest) (Author
 	var auth Authorization
 	c, err := s.run(ctx, req.RequestID, "authorize",
 		[]string{req.PaymentMethod, strconv.FormatInt(req.Amount, 10), req.Currency},
-		func(tx pgx.Tx, c *call) error {
+		func(ctx context.Context, tx pgx.Tx, c *call) error {
 			if c.outcome == "" {
 				if req.PaymentMethod == TokenFlaky && c.n == 1 {
 					return nil // counted, still undecided: this call answers unavailable
@@ -100,7 +105,7 @@ func (s *Simulator) Authorize(ctx context.Context, req AuthorizeRequest) (Author
 func (s *Simulator) Capture(ctx context.Context, req CaptureRequest) error {
 	return s.settle(ctx, "capture", req.RequestID, req.AuthorizationID,
 		[]string{req.AuthorizationID, strconv.FormatInt(req.Amount, 10)},
-		func(tx pgx.Tx, authorized int64) (string, error) {
+		func(ctx context.Context, tx pgx.Tx, authorized int64) (string, error) {
 			if req.Amount < 1 || req.Amount > authorized {
 				return fmt.Sprintf("capture amount %d is outside 1..%d", req.Amount, authorized), nil
 			}
@@ -114,7 +119,7 @@ func (s *Simulator) Capture(ctx context.Context, req CaptureRequest) error {
 func (s *Simulator) Void(ctx context.Context, req VoidRequest) error {
 	return s.settle(ctx, "void", req.RequestID, req.AuthorizationID,
 		[]string{req.AuthorizationID},
-		func(tx pgx.Tx, _ int64) (string, error) {
+		func(ctx context.Context, tx pgx.Tx, _ int64) (string, error) {
 			_, err := tx.Exec(ctx, `UPDATE simulator.authorizations
 				SET state = 'voided', updated_at = now() WHERE id = $1`, req.AuthorizationID)
 			return "", err
@@ -125,8 +130,8 @@ func (s *Simulator) Void(ctx context.Context, req VoidRequest) error {
 // open. The row lock means a capture and a void racing on one authorization
 // are decided one after the other, and the loser is rejected.
 func (s *Simulator) settle(ctx context.Context, operation, requestID, authID string, params []string,
-	apply func(tx pgx.Tx, authorized int64) (rejection string, err error)) error {
-	c, err := s.run(ctx, requestID, operation, params, func(tx pgx.Tx, c *call) error {
+	apply func(ctx context.Context, tx pgx.Tx, authorized int64) (rejection string, err error)) error {
+	c, err := s.run(ctx, requestID, operation, params, func(ctx context.Context, tx pgx.Tx, c *call) error {
 		if c.outcome != "" {
 			return nil
 		}
@@ -144,7 +149,7 @@ func (s *Simulator) settle(ctx context.Context, operation, requestID, authID str
 		case state != "authorized":
 			c.outcome, c.reason = outcomeRejected, "authorization is already "+state
 		default:
-			rejection, err := apply(tx, amount)
+			rejection, err := apply(ctx, tx, amount)
 			if err != nil {
 				return err
 			}
@@ -170,14 +175,21 @@ func (s *Simulator) settle(ctx context.Context, operation, requestID, authID str
 // run claims the request id, counting this call, lets decide fill in an
 // outcome if none is stored yet, and commits. Anything that goes wrong on
 // the processor's side reaches the caller as ErrUnavailable, like a 5xx.
+//
+// A processor that has received a request finishes it whether or not the
+// caller is still listening, so the transaction runs on a context detached
+// from the caller's and bounded only by decisionTimeout (amendment C12). A
+// caller that has gone by then hears unavailable, as if the answer were lost.
 func (s *Simulator) run(ctx context.Context, requestID, operation string, params []string,
-	decide func(pgx.Tx, *call) error) (call, error) {
+	decide func(context.Context, pgx.Tx, *call) error) (call, error) {
+	txCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), decisionTimeout)
+	defer cancel()
 	var c call
 	hash := paramsHash(operation, params)
-	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(txCtx, s.db, func(tx pgx.Tx) error {
 		var storedOp string
 		var storedHash []byte
-		err := tx.QueryRow(ctx, `INSERT INTO simulator.requests (request_id, operation, params_hash)
+		err := tx.QueryRow(txCtx, `INSERT INTO simulator.requests (request_id, operation, params_hash)
 			VALUES ($1, $2, $3)
 			ON CONFLICT (request_id) DO UPDATE
 			   SET calls = simulator.requests.calls + 1, updated_at = now()
@@ -190,7 +202,7 @@ func (s *Simulator) run(ctx context.Context, requestID, operation string, params
 			return ErrRequestIDReused
 		}
 		c.replayed = c.outcome != ""
-		return decide(tx, &c)
+		return decide(txCtx, tx, &c)
 	})
 	switch {
 	case errors.Is(err, ErrRequestIDReused):
@@ -200,6 +212,9 @@ func (s *Simulator) run(ctx context.Context, requestID, operation string, params
 		return call{}, fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}
 	s.emit(ctx, operation, requestID, c)
+	if err := ctx.Err(); err != nil {
+		return call{}, fmt.Errorf("%w: %w", ErrUnavailable, err)
+	}
 	return c, nil
 }
 

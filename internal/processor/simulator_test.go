@@ -111,7 +111,7 @@ func TestTimeoutApprovesButOutlivesTheCaller(t *testing.T) {
 	require.ErrorIs(t, err, processor.ErrUnavailable)
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 	assert.Equal(t, 1, count(t, db.Owner, `SELECT count(*) FROM simulator.authorizations WHERE state = 'authorized'`),
-		"the approval is committed before the caller gives up")
+		"the approval stands although the caller gave up")
 
 	start := time.Now()
 	auth, err := authorize(t.Context(), sim, "pi_1:authorize", processor.TokenTimeout)
@@ -119,6 +119,57 @@ func TestTimeoutApprovesButOutlivesTheCaller(t *testing.T) {
 	assert.True(t, auth.Approved)
 	assert.Less(t, time.Since(start), outlive, "a repeat answers at once")
 	assert.Equal(t, 1, count(t, db.Owner, `SELECT count(*) FROM simulator.authorizations`))
+}
+
+// The processor finishes every request it receives. A caller that is already
+// gone hears unavailable, as if the response were lost, but the outcome is
+// committed and a repeat finds it. No timing involved: every statement has to
+// ignore the caller's cancellation for this to pass.
+func TestDecisionCommitsAfterTheCallerHasGone(t *testing.T) {
+	gone, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	for _, pm := range []string{processor.TokenOK, processor.TokenTimeout} {
+		t.Run("authorize "+pm, func(t *testing.T) {
+			sim, db := newSimulator(t)
+			_, err := authorize(gone, sim, "pi_1:authorize", pm)
+			require.ErrorIs(t, err, processor.ErrUnavailable)
+			require.ErrorIs(t, err, context.Canceled)
+			assert.Equal(t, 1, count(t, db.Owner, `SELECT count(*) FROM simulator.authorizations WHERE state = 'authorized'`))
+
+			auth, err := authorize(t.Context(), sim, "pi_1:authorize", pm)
+			require.NoError(t, err)
+			assert.True(t, auth.Approved)
+			assert.Equal(t, 1, count(t, db.Owner, `SELECT count(*) FROM simulator.authorizations`))
+		})
+	}
+
+	settles := []struct {
+		state  string
+		settle func(ctx context.Context, sim *processor.Simulator, authID string) error
+	}{
+		{"captured", func(ctx context.Context, sim *processor.Simulator, authID string) error {
+			return sim.Capture(ctx, processor.CaptureRequest{RequestID: "pi_1:capture", AuthorizationID: authID, Amount: 49900})
+		}},
+		{"voided", func(ctx context.Context, sim *processor.Simulator, authID string) error {
+			return sim.Void(ctx, processor.VoidRequest{RequestID: "pi_1:void", AuthorizationID: authID})
+		}},
+	}
+	for _, tt := range settles {
+		t.Run(tt.state, func(t *testing.T) {
+			sim, db := newSimulator(t)
+			authID := approved(t, sim, "pi_1:authorize")
+			err := tt.settle(gone, sim, authID)
+			require.ErrorIs(t, err, processor.ErrUnavailable)
+			require.ErrorIs(t, err, context.Canceled)
+
+			var state string
+			require.NoError(t, db.Owner.QueryRow(t.Context(),
+				`SELECT state FROM simulator.authorizations WHERE id = $1`, authID).Scan(&state))
+			assert.Equal(t, tt.state, state)
+			require.NoError(t, tt.settle(t.Context(), sim, authID), "a repeat gets the stored answer")
+		})
+	}
 }
 
 // The dedupe lives in Postgres, so a new simulator, standing in for a
