@@ -1,9 +1,10 @@
 name: ci
 
+# Every pushed branch, so a stage is checked before its PR opens; the PR
+# shows these same results.
 on:
   push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
