@@ -17,7 +17,7 @@ A Stripe-style payments API in Go and PostgreSQL, with a public proof console wh
 - `internal/<concern>`: one package per concern, as listed in `docs/plan.md` section 6
 - `migrations/`: plain SQL, every up with a matching down
 - `docs/`: spec, amendment, plan, AI log
-- `docs/private/`: git-ignored, local only (build guide, original documents, personal notes). Read it for context; never copy its content into tracked files.
+- `docs/private/`: git-ignored, local only (original documents and personal notes). Read it for context; never copy its content into tracked files.
 
 ## Rules
 - Go, chi, pgx, golang-migrate, slog. No ORM, no broker, no new dependency without asking.
