@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -117,15 +118,8 @@ func TestRunServerDrainsInFlightRequests(t *testing.T) {
 // hash is stored.
 func TestSeedPrintsAWorkingKeyOnce(t *testing.T) {
 	db := dbtest.New(t)
-	appURL := db.App.Config().ConnString()
-	getenv := func(name string) string {
-		if name == "LEDGERLINE_DATABASE_URL" {
-			return appURL
-		}
-		return ""
-	}
 	var stdout, stderr bytes.Buffer
-	require.Equal(t, 0, run(t.Context(), []string{"seed", "Asha's store"}, getenv, &stdout, &stderr), stderr.String())
+	require.Equal(t, 0, run(t.Context(), []string{"seed", "Asha's store"}, appEnv(db), &stdout, &stderr), stderr.String())
 
 	merchant := regexp.MustCompile(`merchant\s+(acct_\w+)`).FindStringSubmatch(stdout.String())
 	key := regexp.MustCompile(`secret key\s+(sk_test_\w+)`).FindStringSubmatch(stdout.String())
@@ -141,4 +135,27 @@ func TestSeedPrintsAWorkingKeyOnce(t *testing.T) {
 	require.NoError(t, db.Owner.QueryRow(t.Context(), `SELECT key_hash FROM api_keys`).Scan(&stored))
 	assert.Equal(t, auth.Hash(key[1]), stored)
 	assert.NotContains(t, string(stored), key[1])
+}
+
+type brokenWriter struct{}
+
+func (brokenWriter) Write([]byte) (int, error) { return 0, errors.New("disk full") }
+
+// A key nobody saw is a key nobody has, so seed must not report success.
+func TestSeedFailsWhenTheKeyCannotBePrinted(t *testing.T) {
+	db := dbtest.New(t)
+	var stderr bytes.Buffer
+	assert.Equal(t, 1, run(t.Context(), []string{"seed"}, appEnv(db), brokenWriter{}, &stderr))
+	assert.Contains(t, stderr.String(), "the key is lost; run seed again: disk full")
+}
+
+// appEnv points LEDGERLINE_DATABASE_URL at the test database as the app role.
+func appEnv(db *dbtest.DB) func(string) string {
+	appURL := db.App.Config().ConnString()
+	return func(name string) string {
+		if name == "LEDGERLINE_DATABASE_URL" {
+			return appURL
+		}
+		return ""
+	}
 }

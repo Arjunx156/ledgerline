@@ -400,6 +400,8 @@ func TestAppRoleHasLeastPrivilege(t *testing.T) {
 		`UPDATE ledger_accounts SET type = 'asset'`,
 		`DELETE FROM events`,
 		`DROP TABLE ledger_entries`,
+		`UPDATE simulator.requests SET params_hash = params_hash`,
+		`UPDATE simulator.authorizations SET amount = amount`,
 		`DELETE FROM simulator.requests`,
 		`DELETE FROM simulator.authorizations`,
 		`DROP SCHEMA simulator CASCADE`,

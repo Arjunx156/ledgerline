@@ -33,6 +33,9 @@ func seed(ctx context.Context, args []string, getenv func(string) string, stdout
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(stdout, "merchant    %s\nsecret key  %s\n\nCopy the key now: it is not stored and can't be shown again.\n", merchantID, key)
+	_, err = fmt.Fprintf(stdout, "merchant    %s\nsecret key  %s\n\nCopy the key now: it is not stored and can't be shown again.\n", merchantID, key)
+	if err != nil {
+		return fmt.Errorf("merchant %s was created but printing its key failed, so the key is lost; run seed again: %w", merchantID, err)
+	}
 	return nil
 }

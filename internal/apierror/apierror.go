@@ -68,11 +68,13 @@ func Card(code, message string) *Error {
 	return &Error{Status: http.StatusPaymentRequired, Type: TypeCard, Code: code, Message: message}
 }
 
-// ProcessorUnavailable is a 503 (amendment C5). Retrying is safe: nothing
-// was stored, and the processor dedupes on the request id.
+// ProcessorUnavailable is a 503 (amendment C5). The payment stays where it
+// was, and the processor dedupes on the request id, so whatever settles it
+// later can't charge twice. Resuming by retrying the request comes with
+// idempotency keys.
 func ProcessorUnavailable() *Error {
 	return &Error{Status: http.StatusServiceUnavailable, Type: TypeAPI, Code: "processor_unavailable",
-		Message: "The card processor did not answer in time. Nothing was charged twice; retry the request."}
+		Message: "The card processor did not answer in time. The payment stays where it was until its outcome is known."}
 }
 
 // Internal is a 500. It never carries the underlying error, which is logged

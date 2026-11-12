@@ -35,5 +35,9 @@ CREATE TABLE simulator.authorizations (
     CHECK ((state = 'captured') = (amount_captured > 0))
 );
 
+-- UPDATE only on the columns the simulator moves: a request's parameters
+-- and an authorization's amount are fixed once written.
 GRANT USAGE ON SCHEMA simulator TO ledgerline_app;
-GRANT SELECT, INSERT, UPDATE ON simulator.requests, simulator.authorizations TO ledgerline_app;
+GRANT SELECT, INSERT ON simulator.requests, simulator.authorizations TO ledgerline_app;
+GRANT UPDATE (calls, outcome, reason, updated_at) ON simulator.requests TO ledgerline_app;
+GRANT UPDATE (state, amount_captured, updated_at) ON simulator.authorizations TO ledgerline_app;

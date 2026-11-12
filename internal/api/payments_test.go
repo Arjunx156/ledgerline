@@ -157,6 +157,7 @@ func TestErrors(t *testing.T) {
 		{"confirm unknown payment intent", "POST", "/v1/payment_intents/pi_missing/confirm", map[string]any{"payment_method": "pm_card_ok"}, 404, "resource_missing", "id"},
 		{"unknown payment method", "POST", "/v1/payment_intents/pi_missing/confirm", map[string]any{"payment_method": "pm_card_visa"}, 400, "resource_missing", "payment_method"},
 		{"limit zero", "GET", "/v1/payment_intents?limit=0", nil, 400, "parameter_invalid", "limit"},
+		{"empty limit", "GET", "/v1/customers?limit=", nil, 400, "parameter_invalid_integer", "limit"},
 		{"limit words", "GET", "/v1/customers?limit=ten", nil, 400, "parameter_invalid_integer", "limit"},
 		{"unknown cursor", "GET", "/v1/customers?starting_after=cus_missing", nil, 400, "resource_missing", "starting_after"},
 		{"unknown query parameter", "GET", "/v1/customers?email=asha@example.com", nil, 400, "parameter_unknown", "email"},

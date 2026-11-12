@@ -184,7 +184,7 @@
       "body": {
         "error": {
           "code": "processor_unavailable",
-          "message": "The card processor did not answer in time. Nothing was charged twice; retry the request.",
+          "message": "The card processor did not answer in time. The payment stays where it was until its outcome is known.",
           "type": "api_error"
         }
       },

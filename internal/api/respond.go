@@ -122,8 +122,8 @@ func page(r *http.Request) (payments.Page, error) {
 		}
 	}
 	p := payments.Page{Limit: 10, StartingAfter: q.Get("starting_after")}
-	if s := q.Get("limit"); s != "" {
-		n, err := strconv.Atoi(s)
+	if q.Has("limit") {
+		n, err := strconv.Atoi(q.Get("limit"))
 		if err != nil {
 			return payments.Page{}, apierror.InvalidRequest("parameter_invalid_integer", "limit", "limit must be a whole number.")
 		}
