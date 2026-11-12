@@ -1,9 +1,38 @@
 set windows-shell := ["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]
+set dotenv-load := true
 
 default: check
 
 # Everything CI runs: format, vet, lint, vulnerabilities, tests
 check: fmt-check vet lint vuln test
+
+# Start Postgres and wait until it accepts connections
+up:
+    docker compose up -d --wait
+
+# Stop Postgres, keeping its data
+down:
+    docker compose down
+
+# Delete the local database entirely
+reset-db:
+    docker compose down --volumes
+
+# Apply pending migrations
+migrate:
+    go run ./cmd/ledgerline migrate up
+
+# Roll back n migrations, or all
+migrate-down n="1":
+    go run ./cmd/ledgerline migrate down {{n}}
+
+# Run the API
+run:
+    go run ./cmd/ledgerline serve
+
+# Open psql on the local database as the owner
+psql:
+    docker compose exec postgres psql -U ledgerline -d ledgerline
 
 # Format all Go code in place
 fmt:
@@ -28,7 +57,8 @@ lint:
 vuln:
     go tool govulncheck ./...
 
-# Race detection needs cgo; CI always has it, Windows only with gcc on PATH
+# Tests need Postgres (just up). Race detection needs cgo: CI always has it,
+# Windows only with gcc on PATH.
 [unix]
 test *args:
     go test -race -count=1 ./... {{args}}

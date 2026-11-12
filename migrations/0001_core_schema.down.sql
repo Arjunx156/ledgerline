@@ -1,0 +1,15 @@
+DROP TABLE webhook_deliveries;
+DROP TABLE webhook_endpoints;
+DROP TABLE events;
+DROP TABLE ledger_entries;
+DROP TABLE ledger_transactions;
+DROP FUNCTION ledger_immutable();
+DROP FUNCTION ledger_transaction_balanced();
+DROP FUNCTION ledger_entry_same_transaction();
+DROP TABLE ledger_accounts;
+DROP TABLE idempotency_keys;
+DROP TABLE refunds;
+DROP TABLE payment_intents;
+DROP TABLE customers;
+DROP TABLE api_keys;
+DROP TABLE merchants;

@@ -168,10 +168,10 @@ One fresh session per stage, one PR per stage, the review checklist on every PR.
 | Stage | Work | Done when |
 |---|---|---|
 | **S0 Foundations** | Repo scaffold; docs exported to Markdown; amendment v1.2 (section 2 fixes plus console); CLAUDE.md; public repo, branch protection | `just check` green on an empty test |
-| **S1 Skeleton** (M1) | Compose, schema migration, restricted role, `/healthz`, clean shutdown, CI, `clock`, `faults`, `trace` stubs | up-down-up works; CI goes red on a deliberately broken test; restricted role cannot UPDATE an entry |
-| **S2 Payments** (M2) | State machine, simulator, auth, customers, intents, errors, pagination; trace contract frozen; first recorded fixtures | Table test covers every row; fixtures replay |
+| **S1 Skeleton** (M1) | Compose, schema migration, restricted role, `/healthz`, clean shutdown, CI with Postgres | up-down-up works; CI goes red on a deliberately broken test; restricted role cannot UPDATE an entry |
+| **S2 Payments** (M2) | State machine, simulator, auth, customers, intents, errors, pagination; `clock` and `trace` packages, trace contract frozen; first recorded fixtures | Table test covers every row; fixtures replay |
 | **S2b Walking skeleton** | Deploy `demo` mode; a bare page that makes one payment and prints the SSE stream | Works from a phone. Flushes out hosting, CORS, SSE and HTTP/2 before anything depends on them |
-| **S3 Idempotency** (M3) | Tests first; phases, recovery points, `request_params`, replay header, canonical hash | 100-goroutine test passes 10 runs in a row under `-race` |
+| **S3 Idempotency** (M3) | Tests first; `faults` crash points, phases, recovery points, `request_params`, replay header, canonical hash | 100-goroutine test passes 10 runs in a row under `-race` |
 | **S4 Ledger** (M4) | Posting, fees, refunds, triggers, `invariants`, reference model, fuzz, balances | Fuzz runs 60 s with zero divergence; hand-worked capture matches the database |
 | **S5 Webhooks and recovery** (M5) | Outbox, signer, encrypted secrets, SSRF guard, backoff, dead letters, replay, key sweep, crash matrix | Matrix green; killing the worker mid-run loses and duplicates nothing |
 | **S6 Hardening** | Contract tests, mutation run, rate limit, events endpoint, threat model, `queries.md` with EXPLAIN on the hot queries, nightly job and `proof.json` | Mutation survivors each killed or justified in writing |
@@ -193,7 +193,7 @@ Per stage: writes the PR description; answers that milestone's "must be able to 
 | Public demo endpoints | Not mounted outside `demo` mode; sandbox-scoping tested; TTL, rate limits, SSRF guard; tamper endpoint always rolls back. |
 | Free-tier cold starts and sleeping database | Recorded run on the landing page; explicit wake state; permalinks served as static JSON. |
 | Scope | Never cut tests, S3, S4 or the crash matrix. Cut from S9 upward, then scenes 6, 5, 4. |
-| The crash matrix finds real bugs late | Crash points exist from S1 and the matrix grows with each stage rather than arriving at the end. |
+| The crash matrix finds real bugs late | Crash points arrive with the first two-phase request in S3 and the matrix grows with each stage rather than arriving at the end. |
 
 ## 10. Verification
 
