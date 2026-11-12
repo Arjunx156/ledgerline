@@ -1,0 +1,22 @@
+name: ledgerline
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ledgerline
+      POSTGRES_PASSWORD: ledgerline
+      POSTGRES_DB: ledgerline
+    ports:
+      - "127.0.0.1:${LEDGERLINE_PG_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ledgerline -d ledgerline"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  pgdata:
