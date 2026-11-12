@@ -29,13 +29,13 @@ func TestHealthz(t *testing.T) {
 	db := dbtest.New(t)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	code, body := getHealthz(t, api.NewRouter(db.App, logger))
+	code, body := getHealthz(t, api.NewRouter(api.Config{DB: db.App, Logger: logger}))
 	assert.Equal(t, http.StatusOK, code)
 	assert.Equal(t, "ok", body["status"])
 	assert.NotEmpty(t, body["commit"])
 
 	db.App.Close()
-	code, body = getHealthz(t, api.NewRouter(db.App, logger))
+	code, body = getHealthz(t, api.NewRouter(api.Config{DB: db.App, Logger: logger}))
 	assert.Equal(t, http.StatusServiceUnavailable, code)
 	assert.Equal(t, "database_unavailable", body["status"])
 }

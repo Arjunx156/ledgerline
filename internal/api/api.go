@@ -11,13 +11,44 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/Arjunx156/ledgerline/internal/apierror"
 	"github.com/Arjunx156/ledgerline/internal/buildinfo"
+	"github.com/Arjunx156/ledgerline/internal/payments"
 )
 
-// NewRouter wires every route the API serves.
-func NewRouter(db *pgxpool.Pool, logger *slog.Logger) http.Handler {
+// Config is what the router needs.
+type Config struct {
+	DB       *pgxpool.Pool
+	Logger   *slog.Logger
+	Payments *payments.Service
+}
+
+// NewRouter wires every route the API serves (amendment C8).
+func NewRouter(cfg Config) http.Handler {
 	r := chi.NewRouter()
-	r.Get("/healthz", healthz(db, logger))
+	r.Use(instrument(cfg.Logger))
+	r.NotFound(handler(func(r *http.Request) (any, error) {
+		return nil, apierror.UnknownURL(r.Method, r.URL.Path)
+	}).ServeHTTP)
+	r.MethodNotAllowed(handler(func(r *http.Request) (any, error) {
+		return nil, apierror.UnknownURL(r.Method, r.URL.Path)
+	}).ServeHTTP)
+
+	r.Get("/healthz", healthz(cfg.DB, cfg.Logger))
+
+	h := handlers{svc: cfg.Payments}
+	r.Route("/v1", func(r chi.Router) {
+		r.Use(authenticate(cfg.DB))
+		r.Method(http.MethodPost, "/customers", handler(h.createCustomer))
+		r.Method(http.MethodGet, "/customers", handler(h.listCustomers))
+		r.Method(http.MethodGet, "/customers/{id}", handler(h.getCustomer))
+		r.Method(http.MethodPost, "/payment_intents", handler(h.createPaymentIntent))
+		r.Method(http.MethodGet, "/payment_intents", handler(h.listPaymentIntents))
+		r.Method(http.MethodGet, "/payment_intents/{id}", handler(h.getPaymentIntent))
+		r.Method(http.MethodPost, "/payment_intents/{id}/confirm", handler(h.confirmPaymentIntent))
+		r.Method(http.MethodPost, "/payment_intents/{id}/capture", handler(h.capturePaymentIntent))
+		r.Method(http.MethodPost, "/payment_intents/{id}/cancel", handler(h.cancelPaymentIntent))
+	})
 	return r
 }
 

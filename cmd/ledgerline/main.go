@@ -1,5 +1,5 @@
 // Command ledgerline runs the Ledgerline payments API. Later stages add the
-// worker, demo, seed and verify modes.
+// worker, demo and verify modes.
 package main
 
 import (
@@ -18,6 +18,7 @@ const usage = `usage: ledgerline <command>
 
 commands:
   serve                 run the API (LEDGERLINE_DATABASE_URL, LEDGERLINE_ADDR)
+  seed [name]           create a merchant and print its secret key, once (LEDGERLINE_DATABASE_URL)
   migrate up            apply pending migrations (LEDGERLINE_MIGRATE_URL)
   migrate down <n|all>  roll back n migrations, or all of them
   migrate version       print the applied migration version
@@ -58,6 +59,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 			break
 		}
 		err = serve(ctx, getenv, slog.New(slog.NewJSONHandler(stdout, nil)))
+	case "seed":
+		err = seed(ctx, args[1:], getenv, stdout)
 	case "migrate":
 		err = migrateCmd(args[1:], getenv, stdout)
 	default:

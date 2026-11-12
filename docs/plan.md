@@ -16,7 +16,7 @@ Source of truth: `docs/spec.md` (v1.1) amended by `docs/spec-amendment-v1.2.md`.
 
 ## 2. Spec corrections
 
-A close review of v1.1 found eleven defects: a fuzz invariant that contradicts the posting rules, recovery that misses refunds and manual captures, colliding refund request ids, no void operation, an undefined timeout response, SSRF through webhook URLs, unspecified secret storage, endpoint gaps, amount overflow and zero-amount lines, an undefined canonical hash, and sandbox cleanup against an append-only ledger. All eleven are fixed in `docs/spec-amendment-v1.2.md` (C1 to C11), and each becomes an entry in DESIGN.md.
+A close review of v1.1 found eleven defects, and S2 found a twelfth (C12, the simulator's memory): a fuzz invariant that contradicts the posting rules, recovery that misses refunds and manual captures, colliding refund request ids, no void operation, an undefined timeout response, SSRF through webhook URLs, unspecified secret storage, endpoint gaps, amount overflow and zero-amount lines, an undefined canonical hash, and sandbox cleanup against an append-only ledger. All twelve are fixed in `docs/spec-amendment-v1.2.md` (C1 to C12), and each becomes an entry in DESIGN.md.
 
 The amendment also adds the invariants, crash points, concurrency rules and the console's demo mode, and rewords non-goal 1.2 from "no dashboard UI" to "no merchant dashboard".
 
@@ -169,9 +169,9 @@ One fresh session per stage, one PR per stage, the review checklist on every PR.
 |---|---|---|
 | **S0 Foundations** | Repo scaffold; docs exported to Markdown; amendment v1.2 (section 2 fixes plus console); CLAUDE.md; public repo, branch protection | `just check` green on an empty test |
 | **S1 Skeleton** (M1) | Compose, schema migration, restricted role, `/healthz`, clean shutdown, CI with Postgres | up-down-up works; CI goes red on a deliberately broken test; restricted role cannot UPDATE an entry |
-| **S2 Payments** (M2) | State machine, simulator, auth, customers, intents, errors, pagination; `clock` and `trace` packages, trace contract frozen; first recorded fixtures | Table test covers every row; fixtures replay |
+| **S2 Payments** (M2) | State machine, simulator, auth, customers, intents, errors, pagination; `trace` package, trace contract frozen; first recorded fixtures | Table test covers every row; fixtures replay |
 | **S2b Walking skeleton** | Deploy `demo` mode; a bare page that makes one payment and prints the SSE stream | Works from a phone. Flushes out hosting, CORS, SSE and HTTP/2 before anything depends on them |
-| **S3 Idempotency** (M3) | Tests first; `faults` crash points, phases, recovery points, `request_params`, replay header, canonical hash | 100-goroutine test passes 10 runs in a row under `-race` |
+| **S3 Idempotency** (M3) | Tests first; `clock` and `faults` crash points, phases, recovery points, `request_params`, replay header, canonical hash | 100-goroutine test passes 10 runs in a row under `-race` |
 | **S4 Ledger** (M4) | Posting, fees, refunds, triggers, `invariants`, reference model, fuzz, balances | Fuzz runs 60 s with zero divergence; hand-worked capture matches the database |
 | **S5 Webhooks and recovery** (M5) | Outbox, signer, encrypted secrets, SSRF guard, backoff, dead letters, replay, key sweep, crash matrix | Matrix green; killing the worker mid-run loses and duplicates nothing |
 | **S6 Hardening** | Contract tests, mutation run, rate limit, events endpoint, threat model, `queries.md` with EXPLAIN on the hot queries, nightly job and `proof.json` | Mutation survivors each killed or justified in writing |

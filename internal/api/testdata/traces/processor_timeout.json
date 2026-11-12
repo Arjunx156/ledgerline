@@ -1,0 +1,255 @@
+[
+  {
+    "seq": 1,
+    "session": "",
+    "request_id": "",
+    "at": 0,
+    "lane": "client",
+    "site": "client.request",
+    "data": {
+      "body": {
+        "amount": 49900,
+        "currency": "inr"
+      },
+      "method": "POST",
+      "path": "/v1/payment_intents"
+    }
+  },
+  {
+    "seq": 2,
+    "session": "",
+    "request_id": "req_1",
+    "at": 0,
+    "lane": "api",
+    "site": "api.request",
+    "data": {
+      "method": "POST",
+      "path": "/v1/payment_intents"
+    }
+  },
+  {
+    "seq": 3,
+    "session": "",
+    "request_id": "req_1",
+    "at": 0,
+    "lane": "postgres",
+    "site": "payment_intent.created",
+    "payment_id": "pi_1",
+    "data": {
+      "amount": 49900,
+      "capture_method": "automatic",
+      "currency": "inr",
+      "status": "requires_confirmation"
+    }
+  },
+  {
+    "seq": 4,
+    "session": "",
+    "request_id": "req_1",
+    "at": 0,
+    "lane": "api",
+    "site": "api.response",
+    "data": {
+      "status": 200
+    }
+  },
+  {
+    "seq": 5,
+    "session": "",
+    "request_id": "req_1",
+    "at": 0,
+    "lane": "client",
+    "site": "client.response",
+    "data": {
+      "body": {
+        "amount": 49900,
+        "amount_captured": 0,
+        "amount_refunded": 0,
+        "capture_method": "automatic",
+        "created": 0,
+        "currency": "inr",
+        "customer": null,
+        "failure_code": null,
+        "id": "pi_1",
+        "object": "payment_intent",
+        "payment_method": null,
+        "status": "requires_confirmation"
+      },
+      "status": 200
+    }
+  },
+  {
+    "seq": 6,
+    "session": "",
+    "request_id": "",
+    "at": 0,
+    "lane": "client",
+    "site": "client.request",
+    "data": {
+      "body": {
+        "payment_method": "pm_card_timeout"
+      },
+      "method": "POST",
+      "path": "/v1/payment_intents/pi_1/confirm"
+    }
+  },
+  {
+    "seq": 7,
+    "session": "",
+    "request_id": "req_2",
+    "at": 0,
+    "lane": "api",
+    "site": "api.request",
+    "data": {
+      "method": "POST",
+      "path": "/v1/payment_intents/pi_1/confirm"
+    }
+  },
+  {
+    "seq": 8,
+    "session": "",
+    "request_id": "req_2",
+    "at": 0,
+    "lane": "postgres",
+    "site": "payment_intent.transition",
+    "payment_id": "pi_1",
+    "data": {
+      "event": "confirm",
+      "from": "requires_confirmation",
+      "to": "processing",
+      "version": 2
+    }
+  },
+  {
+    "seq": 9,
+    "session": "",
+    "request_id": "req_2",
+    "at": 0,
+    "lane": "api",
+    "site": "processor.call",
+    "payment_id": "pi_1",
+    "data": {
+      "operation": "authorize",
+      "request_id": "pi_1:authorize"
+    }
+  },
+  {
+    "seq": 10,
+    "session": "",
+    "request_id": "req_2",
+    "at": 0,
+    "lane": "processor",
+    "site": "processor.handled",
+    "data": {
+      "call": 1,
+      "operation": "authorize",
+      "outcome": "approved",
+      "replayed": false,
+      "request_id": "pi_1:authorize"
+    }
+  },
+  {
+    "seq": 11,
+    "session": "",
+    "request_id": "req_2",
+    "at": 0,
+    "lane": "api",
+    "site": "processor.unavailable",
+    "payment_id": "pi_1",
+    "data": {
+      "operation": "authorize",
+      "request_id": "pi_1:authorize",
+      "status": "processing"
+    }
+  },
+  {
+    "seq": 12,
+    "session": "",
+    "request_id": "req_2",
+    "at": 0,
+    "lane": "api",
+    "site": "api.response",
+    "data": {
+      "status": 503
+    }
+  },
+  {
+    "seq": 13,
+    "session": "",
+    "request_id": "req_2",
+    "at": 0,
+    "lane": "client",
+    "site": "client.response",
+    "data": {
+      "body": {
+        "error": {
+          "code": "processor_unavailable",
+          "message": "The card processor did not answer in time. The payment stays where it was until its outcome is known.",
+          "type": "api_error"
+        }
+      },
+      "status": 503
+    }
+  },
+  {
+    "seq": 14,
+    "session": "",
+    "request_id": "",
+    "at": 0,
+    "lane": "client",
+    "site": "client.request",
+    "data": {
+      "body": null,
+      "method": "GET",
+      "path": "/v1/payment_intents/pi_1"
+    }
+  },
+  {
+    "seq": 15,
+    "session": "",
+    "request_id": "req_3",
+    "at": 0,
+    "lane": "api",
+    "site": "api.request",
+    "data": {
+      "method": "GET",
+      "path": "/v1/payment_intents/pi_1"
+    }
+  },
+  {
+    "seq": 16,
+    "session": "",
+    "request_id": "req_3",
+    "at": 0,
+    "lane": "api",
+    "site": "api.response",
+    "data": {
+      "status": 200
+    }
+  },
+  {
+    "seq": 17,
+    "session": "",
+    "request_id": "req_3",
+    "at": 0,
+    "lane": "client",
+    "site": "client.response",
+    "data": {
+      "body": {
+        "amount": 49900,
+        "amount_captured": 0,
+        "amount_refunded": 0,
+        "capture_method": "automatic",
+        "created": 0,
+        "currency": "inr",
+        "customer": null,
+        "failure_code": null,
+        "id": "pi_1",
+        "object": "payment_intent",
+        "payment_method": "pm_card_timeout",
+        "status": "processing"
+      },
+      "status": 200
+    }
+  }
+]

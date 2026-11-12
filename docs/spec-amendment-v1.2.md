@@ -9,7 +9,7 @@ Read `spec.md` first, then this. Where the two differ, this document wins. Every
 
 ## 1. Corrections
 
-A close reading of v1.1 found eleven defects. Each would have surfaced as a failing test, a silent money bug or a security hole somewhere between M3 and the public demo. Fixing them on paper is cheaper.
+A close reading of v1.1 found eleven defects, and building S2 turned up a twelfth (C12). Each would have surfaced as a failing test, a silent money bug or a security hole somewhere between M3 and the public demo. Fixing them on paper is cheaper.
 
 | # | Section | Defect | Consequence if left |
 |---|---|---|---|
@@ -24,6 +24,7 @@ A close reading of v1.1 found eleven defects. Each would have surfaced as a fail
 | C9 | 3.4, 3.8 | No upper bound on amount; zero-amount ledger lines are possible | Overflow in fee maths; a valid capture rejected by the non-zero rule |
 | C10 | 3.5 | "Canonical JSON" is undefined | Equivalent bodies hash differently and get a false 409 |
 | C11 | 7, new 3.11 | Public sandbox data must expire, but ledger entries can never be deleted | Unbounded growth on a free database, or a weakened ledger guard |
+| C12 | 3.7, 5.3 | The simulator dedupes on request id, but its memory is unspecified | An in-memory simulator forgets on a crash and is not shared by API and worker, so crash recovery would authorize twice |
 
 ### C1. The merchant balance invariant
 
@@ -165,6 +166,22 @@ The public demo creates merchants that must expire after an hour, but v1.1 forbi
 
 **Proven by:** tests that the function refuses a real merchant, that the application role cannot delete, and that every invariant holds after a purge.
 
+### C12. The simulator's memory must survive a crash
+
+Flow 5.3 is safe only because the processor dedupes on request id: after a crash, the repeated Phase 2 gets the original result instead of a second charge. A simulator that keeps that memory in process forgets it on exactly the crash being recovered from, and the API and worker processes would each have their own copy. Recovery would then authorize twice, and the demo would prove the opposite of what it claims.
+
+The simulator is the other side of the network, so it is modelled as a separate system with its own durable store:
+
+- Its records live in Postgres in their own schema, `simulator`, written in the simulator's own short transactions, never inside a Ledgerline transaction. Nothing in Ledgerline reads them except reconciliation (I10) and tests.
+- Each request id has one record holding the operation, a hash of its parameters, the outcome and how many calls it has seen. A repeat with the same parameters returns the stored outcome. A repeat with different parameters is rejected, as a real processor rejects a reused idempotency key.
+- An authorization has its own lifecycle: `authorized`, then exactly one of `captured` or `voided`. Capture is capped at the authorized amount. The processor therefore refuses a capture after a void, or a void after a capture, on its own, so two racing requests can never both move money.
+- `payment_intents` stores the processor's `authorization_id`, which capture and void reference.
+- `pm_card_timeout` commits its approval and then outlives the caller's deadline, so the caller sees a timeout although the authorization happened. `pm_card_flaky` answers unavailable to the first call of each request id and records the real outcome on the second.
+- Any failure inside the simulator surfaces to Ledgerline as unavailable (a processor 5xx), never as a decline.
+- Unknown payment method tokens are rejected by the API with 400 `resource_missing` on `payment_method`.
+
+**Proven by:** a test that a new simulator instance, standing in for a restarted process, returns the stored result for a repeated request id without a second authorization; tests for each token; and a race between capture and void where exactly one succeeds.
+
 ## 2. Additions to the technical design
 
 ### 3.9 Database roles (new)
@@ -239,7 +256,8 @@ Site codes are indexed to `file:line` at build time, and `/healthz` reports the 
 | Table | Change |
 |---|---|
 | merchants | Add `sandbox boolean not null default false` |
-| payment_intents | `amount` check becomes 1 to 99,999,999 |
+| payment_intents | `amount` check becomes 1 to 99,999,999; add `authorization_id` (C12) |
+| simulator.requests, simulator.authorizations (new) | The simulator's durable memory (C12), in their own schema |
 | refunds | `status` is `pending`, `succeeded` or `failed` |
 | idempotency_keys | Add `operation`, `resource_id`, `request_params jsonb`, `updated_at`; index on `(recovery_point, updated_at)` for the sweep |
 | ledger_transactions | Add `merchant_id` |
@@ -248,7 +266,7 @@ Site codes are indexed to `file:line` at build time, and `/healthz` reports the 
 | demo_trace_events (new) | `seq bigserial`, session, request id, time, lane, site, payment id, key, data; index on `(session, seq)` |
 | demo_receiver_hits (new) | session, received time, headers, body, signature valid |
 
-The schema ships as three migrations: `0001` the core schema, `0002` roles and grants, `0003` the demo tables and purge function.
+The schema ships as four migrations: `0001` the core schema, `0002` roles and grants, `0003` the processor simulator (C12), `0004` the demo tables and purge function.
 
 ## 5. Process changes
 
