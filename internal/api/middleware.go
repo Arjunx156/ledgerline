@@ -34,12 +34,18 @@ func merchantFrom(ctx context.Context) string {
 // instrument gives every request an id (returned as Request-Id), a logger
 // that carries it, one access log line, a trace of its start and end, and a
 // JSON 500 instead of a dropped connection if a handler panics.
-func instrument(logger *slog.Logger) func(http.Handler) http.Handler {
+//
+// In demo mode every request starts with a pending trace, which
+// authentication binds to the session the key belongs to.
+func instrument(logger *slog.Logger, demo bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			id := ids.New(ids.Request)
 			ctx := context.WithValue(r.Context(), requestIDKey{}, id)
+			if demo {
+				ctx = trace.WithRecorder(ctx, &trace.Pending{})
+			}
 			ctx = logctx.New(trace.WithRequest(ctx, id), logger, "request_id", id)
 			r = r.WithContext(ctx)
 			w.Header().Set("Request-Id", id)
@@ -90,8 +96,10 @@ func (s *statusRecorder) Unwrap() http.ResponseWriter { return s.ResponseWriter 
 
 // authenticate resolves the Bearer key to a merchant (FR-1). Operator keys
 // are refused here: they open /internal only, so a leaked operator key can't
-// move a merchant's money and a merchant key can't read the ledger.
-func authenticate(db *pgxpool.Pool) func(http.Handler) http.Handler {
+// move a merchant's money and a merchant key can't read the ledger. A demo
+// session's key binds the request's trace to that session's stream; sessions
+// is nil outside demo mode.
+func authenticate(db *pgxpool.Pool, sessions SessionTracer) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			raw, ok := bearer(r)
@@ -105,6 +113,10 @@ func authenticate(db *pgxpool.Pool) func(http.Handler) http.Handler {
 			case errors.Is(err, auth.ErrUnknownKey):
 				writeError(w, r, apierror.Authentication("api_key_invalid", "Invalid API key provided: "+redact(raw)+"."))
 				return
+			case errors.Is(err, auth.ErrExpiredKey):
+				writeError(w, r, apierror.Authentication("api_key_expired",
+					"This sandbox session has ended, and its key with it. Start a new one with POST /demo/sessions."))
+				return
 			case err != nil:
 				writeError(w, r, err)
 				return
@@ -114,6 +126,9 @@ func authenticate(db *pgxpool.Pool) func(http.Handler) http.Handler {
 				return
 			}
 			logctx.Add(r.Context(), "merchant_id", key.MerchantID)
+			if key.Session != "" && sessions != nil {
+				trace.Bind(r.Context(), sessions.ForSession(key.Session))
+			}
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), merchantKey{}, key.MerchantID)))
 		})
 	}

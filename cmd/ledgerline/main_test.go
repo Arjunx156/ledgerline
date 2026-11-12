@@ -36,6 +36,8 @@ func TestRun(t *testing.T) {
 		{"version with args", []string{"version", "extra"}, 2, "", "takes no arguments"},
 		{"serve with args", []string{"serve", "now"}, 2, "", "takes no arguments"},
 		{"serve without database", []string{"serve"}, 1, "", "LEDGERLINE_DATABASE_URL is not set"},
+		{"demo with args", []string{"demo", "now"}, 2, "", "takes no arguments"},
+		{"demo without origins", []string{"demo"}, 1, "", "LEDGERLINE_DEMO_ORIGINS is not set"},
 		{"migrate alone", []string{"migrate"}, 2, "", "migrate needs up, down or version"},
 		{"migrate sideways", []string{"migrate", "sideways"}, 2, "", `unknown migrate command "sideways"`},
 		{"migrate down without steps", []string{"migrate", "down"}, 2, "", "needs a number of steps"},
@@ -158,4 +160,24 @@ func appEnv(db *dbtest.DB) func(string) string {
 		}
 		return ""
 	}
+}
+
+func TestDemoOrigins(t *testing.T) {
+	got, err := demoOrigins(" https://ledgerline-skeleton.onrender.com/ , http://localhost:5173,,")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"https://ledgerline-skeleton.onrender.com", "http://localhost:5173"}, got)
+
+	for _, bad := range []string{"", " , ", "localhost:5173", "ftp://example.com", "https://example.com/page",
+		"https://example.com?x=1", "https://user@example.com", "https://"} {
+		_, err := demoOrigins(bad)
+		assert.Error(t, err, "%q", bad)
+	}
+}
+
+func TestListenAddr(t *testing.T) {
+	env := func(vars map[string]string) func(string) string { return func(k string) string { return vars[k] } }
+	assert.Equal(t, ":8080", listenAddr(env(nil)))
+	assert.Equal(t, ":10000", listenAddr(env(map[string]string{"PORT": "10000"})), "the platform's port")
+	assert.Equal(t, "127.0.0.1:9000", listenAddr(env(map[string]string{"PORT": "10000", "LEDGERLINE_ADDR": "127.0.0.1:9000"})),
+		"an explicit address wins")
 }

@@ -17,13 +17,19 @@ import (
 // KeyPrefix marks a secret test-mode key.
 const KeyPrefix = "sk_test_"
 
-// ErrUnknownKey means no key with that hash exists.
-var ErrUnknownKey = errors.New("unknown api key")
+var (
+	// ErrUnknownKey means no key with that hash exists.
+	ErrUnknownKey = errors.New("unknown api key")
+
+	// ErrExpiredKey means the key belongs to a demo session that has ended.
+	ErrExpiredKey = errors.New("api key expired")
+)
 
 // Key is what a valid secret key resolves to.
 type Key struct {
 	MerchantID string
 	Operator   bool
+	Session    string // the demo session of a sandbox merchant, else empty
 }
 
 // Hash is the only form of a key that is ever stored.
@@ -38,16 +44,29 @@ func NewKey() string {
 	return KeyPrefix + ids.Random(32)
 }
 
-// Lookup resolves a raw key.
+// Lookup resolves a raw key. A sandbox merchant's key stops working when
+// its demo session ends, judged by the database's clock, the one that set
+// the expiry.
 func Lookup(ctx context.Context, db *pgxpool.Pool, raw string) (Key, error) {
-	var k Key
-	err := db.QueryRow(ctx, `SELECT merchant_id, operator FROM api_keys WHERE key_hash = $1`, Hash(raw)).
-		Scan(&k.MerchantID, &k.Operator)
+	var (
+		k       Key
+		session *string
+		expired bool
+	)
+	err := db.QueryRow(ctx, `SELECT k.merchant_id, k.operator, s.id, coalesce(s.expires_at <= now(), false)
+		FROM api_keys k LEFT JOIN demo_sessions s ON s.merchant_id = k.merchant_id
+		WHERE k.key_hash = $1`, Hash(raw)).Scan(&k.MerchantID, &k.Operator, &session, &expired)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Key{}, ErrUnknownKey
 	}
 	if err != nil {
 		return Key{}, fmt.Errorf("look up api key: %w", err)
+	}
+	if expired {
+		return Key{}, ErrExpiredKey
+	}
+	if session != nil {
+		k.Session = *session
 	}
 	return k, nil
 }

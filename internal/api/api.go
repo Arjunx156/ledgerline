@@ -21,12 +21,19 @@ type Config struct {
 	DB       *pgxpool.Pool
 	Logger   *slog.Logger
 	Payments *payments.Service
+	Demo     *Demo // nil except in demo mode
 }
 
-// NewRouter wires every route the API serves (amendment C8).
+// NewRouter wires every route the API serves (amendment C8), and the demo
+// routes when cfg.Demo is set.
 func NewRouter(cfg Config) http.Handler {
 	r := chi.NewRouter()
-	r.Use(instrument(cfg.Logger))
+	r.Use(instrument(cfg.Logger, cfg.Demo != nil))
+	var sessions SessionTracer
+	if cfg.Demo != nil {
+		r.Use(cors(cfg.Demo.Origins))
+		sessions = cfg.Demo.Recorder
+	}
 	r.NotFound(handler(func(r *http.Request) (any, error) {
 		return nil, apierror.UnknownURL(r.Method, r.URL.Path)
 	}).ServeHTTP)
@@ -35,10 +42,15 @@ func NewRouter(cfg Config) http.Handler {
 	}).ServeHTTP)
 
 	r.Get("/healthz", healthz(cfg.DB, cfg.Logger))
+	if cfg.Demo != nil {
+		d := demoHandlers{db: cfg.DB, cfg: cfg.Demo}
+		r.Method(http.MethodPost, "/demo/sessions", handler(d.createSession))
+		r.Get("/demo/stream", d.stream)
+	}
 
 	h := handlers{svc: cfg.Payments}
 	r.Route("/v1", func(r chi.Router) {
-		r.Use(authenticate(cfg.DB))
+		r.Use(authenticate(cfg.DB, sessions))
 		r.Method(http.MethodPost, "/customers", handler(h.createCustomer))
 		r.Method(http.MethodGet, "/customers", handler(h.listCustomers))
 		r.Method(http.MethodGet, "/customers/{id}", handler(h.getCustomer))

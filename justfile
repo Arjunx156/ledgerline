@@ -34,6 +34,18 @@ seed name="Test merchant":
 run:
     go run ./cmd/ledgerline serve
 
+# Run the API in demo mode, with sandbox sessions and the trace stream
+demo:
+    go run ./cmd/ledgerline demo
+
+# Serve the bare demo page; open http://localhost:5173/?api=http://localhost:8080
+page:
+    uv run --no-project python -m http.server 5173 --bind 127.0.0.1 --directory web/skeleton
+
+# Build the deployable image
+image:
+    docker build -t ledgerline .
+
 # Open psql on the local database as the owner
 psql:
     docker compose exec postgres psql -U ledgerline -d ledgerline

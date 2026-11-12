@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="author" content="Arjun Krishnan">
+<meta name="description" content="Ledgerline's walking skeleton: one sandbox payment and the server's live trace.">
+<meta name="ledgerline-api" content="https://ledgerline-api.onrender.com">
+<title>Ledgerline walking skeleton</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">Ledgerline, walking skeleton</p>
+    <h1>One payment, traced live</h1>
+    <p class="lede">Start a sandbox merchant, pay it with a test card, and watch every step the server records arrive as it records it. This page proves the hosting, cross-origin calls, server-sent events and HTTP/2 work from a phone before the proof console depends on them.</p>
+  </header>
+
+  <section aria-labelledby="connection-heading">
+    <h2 id="connection-heading">Connection</h2>
+    <dl class="facts">
+      <div><dt>API</dt><dd id="api"></dd></div>
+      <div><dt>Health</dt><dd id="health">checking</dd></div>
+      <div><dt>Protocol</dt><dd id="protocol">not measured yet</dd></div>
+      <div><dt>Session</dt><dd id="session">none yet</dd></div>
+      <div><dt>Stream</dt><dd id="stream">closed</dd></div>
+    </dl>
+  </section>
+
+  <section aria-labelledby="try-heading">
+    <h2 id="try-heading">Try it</h2>
+    <div class="controls">
+      <button id="start" type="button" disabled>Start a sandbox session</button>
+      <div class="pay">
+        <label for="card">Test card</label>
+        <select id="card">
+          <option value="pm_card_ok">pm_card_ok, approves</option>
+          <option value="pm_card_declined">pm_card_declined, declines</option>
+          <option value="pm_card_insufficient_funds">pm_card_insufficient_funds, declines</option>
+          <option value="pm_card_timeout">pm_card_timeout, answers too late</option>
+          <option value="pm_card_flaky">pm_card_flaky, fails the first call</option>
+        </select>
+        <button id="pay" type="button" disabled>Pay ₹499.00</button>
+      </div>
+      <button id="burst" type="button" disabled>Send 20 requests at once</button>
+    </div>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+  </section>
+
+  <section aria-labelledby="trace-heading">
+    <h2 id="trace-heading">Trace <span id="count" class="count"></span></h2>
+    <p id="empty" class="muted">Start a session and its trace appears here, starting with the request that created it.</p>
+    <ol id="trace" class="trace" aria-live="off"></ol>
+  </section>
+
+  <footer>Engineered by Arjun Krishnan. <a href="https://github.com/Arjunx156/ledgerline">Source on GitHub</a>.</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,16 @@
+# Never in an image: local secrets and private notes.
+.env
+.env.*
+!.env.example
+docs/private/
+.claude/
+
+# Build output. Everything git tracks stays in, even what the build doesn't
+# need: a tracked file missing from the context would make the binary report
+# a dirty tree.
+bin/
+dist/
+*.exe
+*.test
+*.out
+coverage.*

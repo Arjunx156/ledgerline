@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Arjunx156/ledgerline/internal/apierror"
 	"github.com/Arjunx156/ledgerline/internal/logctx"
@@ -46,8 +47,9 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 		logctx.From(r.Context()).ErrorContext(r.Context(), "request failed", "err", err)
 		apiErr = apierror.Internal(requestIDFrom(r.Context()))
 	}
-	if apiErr.Status == http.StatusServiceUnavailable {
-		w.Header().Set("Retry-After", "1")
+	if apiErr.RetryAfter > 0 {
+		// whole seconds, rounded up, so a client never retries too early
+		w.Header().Set("Retry-After", strconv.FormatInt(int64((apiErr.RetryAfter+time.Second-1)/time.Second), 10))
 	}
 	writeJSON(w, apiErr.Status, struct {
 		Error *apierror.Error `json:"error"`

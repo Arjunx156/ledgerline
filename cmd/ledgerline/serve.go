@@ -1,7 +1,6 @@
 package main
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -9,6 +8,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Arjunx156/ledgerline/internal/api"
 	"github.com/Arjunx156/ledgerline/internal/buildinfo"
@@ -30,24 +31,56 @@ const (
 )
 
 func serve(ctx context.Context, getenv func(string) string, logger *slog.Logger) error {
-	dbURL, err := requireEnv(getenv, "LEDGERLINE_DATABASE_URL")
+	app, err := start(ctx, "serving", getenv, logger)
 	if err != nil {
 		return err
+	}
+	defer app.pool.Close()
+	return runServer(ctx, app.ln, api.NewRouter(app.config(logger)), logger)
+}
+
+// app is what serve and demo share: the database, the listener and the
+// payments service.
+type app struct {
+	pool     *pgxpool.Pool
+	ln       net.Listener
+	payments *payments.Service
+}
+
+func start(ctx context.Context, mode string, getenv func(string) string, logger *slog.Logger) (*app, error) {
+	dbURL, err := requireEnv(getenv, "LEDGERLINE_DATABASE_URL")
+	if err != nil {
+		return nil, err
 	}
 	pool, err := database.Open(ctx, dbURL)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer pool.Close()
-
-	ln, err := net.Listen("tcp", cmp.Or(getenv("LEDGERLINE_ADDR"), ":8080"))
+	ln, err := net.Listen("tcp", listenAddr(getenv))
 	if err != nil {
-		return err
+		pool.Close()
+		return nil, err
 	}
-	logger.Info("serving", "addr", ln.Addr().String(), "commit", buildinfo.Read().String())
+	logger.Info(mode, "addr", ln.Addr().String(), "commit", buildinfo.Read().String())
 	sim := processor.NewSimulator(pool, simulatorOutlive)
 	svc := payments.NewService(pool, sim, payments.Config{ProcessorTimeout: processorTimeout})
-	return runServer(ctx, ln, api.NewRouter(api.Config{DB: pool, Logger: logger, Payments: svc}), logger)
+	return &app{pool: pool, ln: ln, payments: svc}, nil
+}
+
+func (a *app) config(logger *slog.Logger) api.Config {
+	return api.Config{DB: a.pool, Logger: logger, Payments: a.payments}
+}
+
+// listenAddr is LEDGERLINE_ADDR, else the PORT a hosting platform assigns,
+// else :8080.
+func listenAddr(getenv func(string) string) string {
+	if addr := getenv("LEDGERLINE_ADDR"); addr != "" {
+		return addr
+	}
+	if port := getenv("PORT"); port != "" {
+		return ":" + port
+	}
+	return ":8080"
 }
 
 // runServer serves until ctx is cancelled, then stops accepting connections
