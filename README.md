@@ -75,7 +75,7 @@ Both halves run free: Postgres on Neon, and the API and the page on Render, desc
 
 3. **Render.** In the Render dashboard choose New, then Blueprint, connect this repository and pick the branch. Render reads render.yaml and asks for one secret, `LEDGERLINE_DATABASE_URL`: paste `ledgerline_app`'s direct connection string, ending in `?sslmode=require`. It must not be the `-pooler` host. The trace stream holds a `LISTEN`, which needs a session of its own, and Neon's pooler takes the connection back after every transaction.
 
-4. **Addresses.** Render names each address after its service, first come, first served. If either service didn't get the address in render.yaml (`ledgerline-api.onrender.com` and `ledgerline-skeleton.onrender.com`), update `LEDGERLINE_DEMO_ORIGINS` and the page's `Content-Security-Policy` there, and the `ledgerline-api` meta tag in [web/skeleton/index.html](web/skeleton/index.html).
+4. **Addresses.** Render names each address after its service and adds a suffix when the name is taken; this deployment's are `ledgerline-api-iy4a.onrender.com` and `ledgerline-skeleton.onrender.com`. A new deployment that gets other addresses updates `LEDGERLINE_DEMO_ORIGINS` and the page's `Content-Security-Policy` in render.yaml, and the `ledgerline-api` meta tag in [web/skeleton/index.html](web/skeleton/index.html).
 
 5. Once the branch is merged, point the Blueprint at `main`.
 

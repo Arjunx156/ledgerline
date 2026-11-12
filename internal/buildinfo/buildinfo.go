@@ -11,17 +11,25 @@ type Info struct {
 	Modified bool   // built from a working tree with uncommitted changes
 }
 
+// stamp is the commit set at link time (-X) by builds without a .git to read,
+// such as Render's Docker build. Go's own VCS stamp wins when both exist,
+// since only it knows whether the tree was dirty.
+var stamp string
+
 // Read returns the build info embedded in the running binary.
 func Read() Info {
-	bi, ok := debug.ReadBuildInfo()
-	if !ok {
-		return Info{Commit: "unknown"}
+	var settings []debug.BuildSetting
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		settings = bi.Settings
 	}
-	return fromSettings(bi.Settings)
+	return fromSettings(settings, stamp)
 }
 
-func fromSettings(settings []debug.BuildSetting) Info {
+func fromSettings(settings []debug.BuildSetting, stamp string) Info {
 	info := Info{Commit: "unknown"}
+	if stamp != "" {
+		info.Commit = stamp
+	}
 	for _, s := range settings {
 		switch s.Key {
 		case "vcs.revision":

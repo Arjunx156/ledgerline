@@ -31,7 +31,7 @@ services:
     headers:
       - path: /*
         name: Content-Security-Policy
-        value: "default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://ledgerline-api.onrender.com; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+        value: "default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://ledgerline-api-iy4a.onrender.com; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
       - path: /*
         name: Referrer-Policy
         value: no-referrer
